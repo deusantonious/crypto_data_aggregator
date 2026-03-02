@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            g++-13 \
+            cmake \
+            make \
+            libssl-dev \
+            clang-tidy \
+            pipx
+          pipx install conan
+          pipx ensurepath
+
+      - name: Configure Conan
+        run: |
+          conan profile detect --force
+          # Override compiler settings to match the project profile
+          conan profile path default
+          cat > "$(conan profile path default)" <<'EOF'
+          [settings]
+          os=Linux
+          arch=x86_64
+          compiler=gcc
+          compiler.version=13
+          compiler.libcxx=libstdc++11
+          compiler.cppstd=20
+
+          [conf]
+          tools.cmake.cmaketoolchain:user_presets=
+          EOF
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt', 'profiles/default') }}
+          restore-keys: |
+            conan-${{ runner.os }}-
+
+      - name: Install Conan dependencies
+        run: |
+          conan install . \
+            --output-folder=build \
+            --build=missing \
+            -s build_type=Debug \
+            -s compiler=gcc \
+            -s compiler.version=13 \
+            -s compiler.libcxx=libstdc++11 \
+            -s compiler.cppstd=20
+
+      - name: Configure CMake (with tests & clang-tidy)
+        run: cmake --preset ci
+        env:
+          CC: gcc-13
+          CXX: g++-13
+
+      - name: Build
+        run: cmake --build --preset ci -j$(nproc)
+
+      - name: Run tests
+        run: ctest --preset ci

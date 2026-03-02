@@ -1,0 +1,14 @@
+{
+    "windowLength": 5,
+    "outputPath": "./output.txt",
+    "exchanges": [
+        {
+            "name": "binance",
+            "streams": [
+                "BTCUSDT",
+                "ETHUSDT",
+                "SOLUSDT"
+            ]
+        }
+    ]
+}
